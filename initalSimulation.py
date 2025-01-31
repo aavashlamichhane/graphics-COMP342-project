@@ -8,19 +8,22 @@ import time
 from OpenGL.GLUT import GLUT_BITMAP_HELVETICA_18, GLUT_BITMAP_TIMES_ROMAN_24
 
 class TrafficSimulation:
-    def __init__(self, width=800, height=600):
+    def __init__(self, width=1600, height=1200):
         self.width = width
         self.height = height
         self.traffic_light_state = "green"
         self.light_timer = 0
         self.light_change_interval = 900
-        self.vehicle_speed = 0.8
-        self.pedestrian_speed = 0.4
-        self.zebra_start = 350
-        self.zebra_end = 450
+        self.vehicle_speed = 1.5
+        self.pedestrian_speed = 0.5
+        self.zebra_start = int(0.35 * width)
+        self.zebra_end = int(0.45 * width)
         self.feedback_message = ""
         self.feedback_timer = 0
         self.feedback_duration = 120
+        
+        self.road_bottom = int(self.height/3)
+        self.road_top = int(2*self.height/3)
         
         self.vehicles = []
         self.pedestrians = []
@@ -39,12 +42,26 @@ class TrafficSimulation:
         
         glfw.make_context_current(self.window)
         glfw.set_key_callback(self.window, self.key_callback)
+        glfw.set_window_size_callback(self.window, self.window_size_callback)
         glutInit()
         
+        self.setup_projection()
+        
+    def setup_projection(self):
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluOrtho2D(0, width, 0, height)
+        gluOrtho2D(0, self.width, 0, self.height)
         glMatrixMode(GL_MODELVIEW)
+        
+    def window_size_callback(self, window, width, height):
+        self.width = width
+        self.height = height
+        self.zebra_start = int(0.35 * width)
+        self.zebra_end = int(0.45 * width)
+        self.road_bottom = int(self.height/3)
+        self.road_top = int(2*self.height/3)
+        glViewport(0, 0, width, height)
+        self.setup_projection()
         
     def draw_game_over(self):
         # Dark overlay
@@ -71,7 +88,7 @@ class TrafficSimulation:
     def draw_feedback(self):
         if self.feedback_timer > 0:
             glColor3f(1, 0, 0)
-            glRasterPos2f(10, 570)
+            glRasterPos2f(int(self.height/30), self.height - int(self.height/30))
             for c in self.feedback_message:
                 glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
             self.feedback_timer -= 1
@@ -106,7 +123,8 @@ class TrafficSimulation:
     def draw_timer(self):
         time_left = (self.light_change_interval - self.light_timer) // 60
         glColor3f(1, 1, 1)
-        glRasterPos2f(270, 540)
+        glRasterPos2f(self.zebra_start - int(self.width/16), self.road_top + int(self.height/6)+int(self.height/11))
+
         for c in str(time_left):
             glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
 
@@ -123,7 +141,7 @@ class TrafficSimulation:
     def spawn_vehicle(self):
         new_vehicle = {
             'x': -60,
-            'y': random.randint(250, 350),
+            'y': random.randint(self.road_bottom + int(self.height/15), self.road_top - int(self.height/15)),
             'speed': self.vehicle_speed,
             'color': (random.random(), random.random(), random.random())
         }
@@ -136,8 +154,8 @@ class TrafficSimulation:
             not self.is_vehicle_in_zebra_crossing()):
             for _ in range(3):
                 new_pedestrian = {
-                    'x': random.randint(360, 440),
-                    'y': 180,
+                    'x': random.randint(self.zebra_start+10, self.zebra_end-10),
+                    'y': self.road_bottom - int(self.height/30),
                     'speed': self.pedestrian_speed
                 }
                 self.pedestrians.append(new_pedestrian)
@@ -201,50 +219,65 @@ class TrafficSimulation:
             for ped in self.pedestrians[:]:
                 if self.pedestrian_crossing_enabled:
                     ped['y'] += ped['speed']
-                if ped['y'] > 400:
+                if ped['y'] > self.road_top:
                     self.pedestrians.remove(ped)
 
     def draw_road(self):
         glColor3f(0.5, 0.5, 0.5)
         glBegin(GL_QUADS)
-        glVertex2f(0, 200)
-        glVertex2f(self.width, 200)
-        glVertex2f(self.width, 400)
-        glVertex2f(0, 400)
+        glVertex2f(0, self.road_bottom)
+        glVertex2f(self.width, self.road_bottom)
+        glVertex2f(self.width, self.road_top)
+        glVertex2f(0, self.road_top)
         glEnd()
 
         glColor3f(1, 1, 1)
         for x in range(self.zebra_start, self.zebra_end, 20):
             glBegin(GL_QUADS)
-            glVertex2f(x, 200)
-            glVertex2f(x + 10, 200)
-            glVertex2f(x + 10, 400)
-            glVertex2f(x, 400)
+            glVertex2f(x, self.road_bottom)
+            glVertex2f(x + 10, self.road_bottom)
+            glVertex2f(x + 10, self.road_top)
+            glVertex2f(x, self.road_top)
             glEnd()
 
     def draw_traffic_light(self):
+        pole_x_min = self.zebra_start - int(self.width/16)
+        pole_x_max = self.zebra_start - int(3*self.width/80)
+        pole_y_min = self.road_top
+        pole_y_max = self.road_top + int(self.height/6)
+        
         glColor3f(0.3, 0.3, 0.3)
         glBegin(GL_QUADS)
-        glVertex2f(300, 400)
-        glVertex2f(320, 400)
-        glVertex2f(320, 500)
-        glVertex2f(300, 500)
+        glVertex2f(pole_x_min, pole_y_min)
+        glVertex2f(pole_x_max, pole_y_min)
+        glVertex2f(pole_x_max, pole_y_max)
+        glVertex2f(pole_x_min, pole_y_max)
         glEnd()
+        
+        box_x_min = pole_x_min - int(self.width/80)
+        box_x_max = pole_x_max + int(self.width/80)
+        box_y_min = pole_y_min + int(2*self.height/15)
+        box_y_max = pole_y_max + int(self.height/12)
 
         glColor3f(0.2, 0.2, 0.2)
         glBegin(GL_QUADS)
-        glVertex2f(290, 480)
-        glVertex2f(330, 480)
-        glVertex2f(330, 550)
-        glVertex2f(290, 550)
+        glVertex2f(box_x_min, box_y_min)
+        glVertex2f(box_x_max, box_y_min)
+        glVertex2f(box_x_max, box_y_max)
+        glVertex2f(box_x_min, box_y_max)
         glEnd()
+        
+        light_x_min = box_x_min + int((box_x_max - box_x_min)*0.2)
+        light_x_max = box_x_max - int((box_x_max - box_x_min)*0.2)
+        light_y_min = box_y_min + int((box_y_max - box_y_min)*0.25)
+        light_y_max = box_y_max - int((box_y_max - box_y_min)*0.25)
 
         glColor3f(1, 0, 0) if self.traffic_light_state == "red" else glColor3f(0, 1, 0)
         glBegin(GL_QUADS)
-        glVertex2f(300, 500)
-        glVertex2f(320, 500)
-        glVertex2f(320, 530)
-        glVertex2f(300, 530)
+        glVertex2f(light_x_min, light_y_min)
+        glVertex2f(light_x_max, light_y_min)
+        glVertex2f(light_x_max, light_y_max)
+        glVertex2f(light_x_min, light_y_max)
         glEnd()
 
     def draw_vehicles(self):
@@ -274,8 +307,8 @@ class TrafficSimulation:
         glVertex2f(0, self.height)
         glVertex2f(self.width, self.height)
         glColor3f(0.0, 0.0, 0.5)  # Dark blue
-        glVertex2f(self.width, 400)
-        glVertex2f(0, 400)
+        glVertex2f(self.width, self.road_top)
+        glVertex2f(0, self.road_top)
         glEnd()
 
         # Ground gradient
@@ -284,8 +317,8 @@ class TrafficSimulation:
         glVertex2f(0, 0)
         glVertex2f(self.width, 0)
         glColor3f(0.2, 0.8, 0.2)  # Light green
-        glVertex2f(self.width, 200)
-        glVertex2f(0, 200)
+        glVertex2f(self.width, self.road_bottom)
+        glVertex2f(0, self.road_bottom)
         glEnd()
     
     
@@ -334,7 +367,7 @@ class TrafficSimulation:
         glfw.terminate()
 
 def main():
-    sim = TrafficSimulation()
+    sim = TrafficSimulation(width=800, height=600)
     sim.run()
 
 if __name__ == "__main__":
