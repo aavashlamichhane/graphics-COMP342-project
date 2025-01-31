@@ -18,12 +18,16 @@ class TrafficSimulation:
         self.pedestrian_speed = 0.4
         self.zebra_start = 350
         self.zebra_end = 450
+        self.feedback_message = ""
+        self.feedback_timer = 0
+        self.feedback_duration = 120
         
         self.vehicles = []
         self.pedestrians = []
         self.accident_occurred = False
         self.auto_traffic_light = True
         self.pedestrian_crossing_enabled = False
+        self.pause_timer = False
         
         if not glfw.init():
             raise RuntimeError("Failed to initialize GLFW")
@@ -63,6 +67,14 @@ class TrafficSimulation:
         glRasterPos2f(self.width/2 - 100, self.height/2 - 20)
         for c in "Press R to Reset or Q to Quit":
             glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
+    
+    def draw_feedback(self):
+        if self.feedback_timer > 0:
+            glColor3f(1, 0, 0)
+            glRasterPos2f(10, 570)
+            for c in self.feedback_message:
+                glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, ord(c))
+            self.feedback_timer -= 1
 
     def key_callback(self, window, key, scancode, action, mods):
         if action == glfw.PRESS:
@@ -74,8 +86,18 @@ class TrafficSimulation:
                     self.traffic_light_state = "red" if self.traffic_light_state == "green" else "green"
             elif key == glfw.KEY_P and not self.accident_occurred and self.traffic_light_state == "red":
                 if not self.is_vehicle_in_zebra_crossing():
-                    self.pedestrian_crossing_enabled = True
-                    self.spawn_pedestrians()
+                    if self.light_timer < self.light_change_interval:
+                        self.pedestrian_crossing_enabled = True
+                        self.spawn_pedestrians()
+                    else:
+                        self.feedback_message = "Cannot add pedestrians after timer runs out"
+                        self.feedback_timer = self.feedback_duration
+                else:
+                    self.feedback_message = "Cannot add pedestrians while vehicles are in crossing"
+                    self.feedback_timer = self.feedback_duration
+            elif key == glfw.KEY_P and self.traffic_light_state == "green":
+                self.feedback_message = "Pedestrians can only cross on red light"
+                self.feedback_timer = self.feedback_duration
             elif key == glfw.KEY_V and not self.accident_occurred:
                 self.spawn_vehicle()
             elif key == glfw.KEY_R:
@@ -122,13 +144,21 @@ class TrafficSimulation:
 
     def update_traffic_light(self):
         if self.auto_traffic_light:
-            self.light_timer += 1
+            if not self.pause_timer:
+                self.light_timer += 1
             if self.light_timer >= self.light_change_interval:
-                self.traffic_light_state = "red" if self.traffic_light_state == "green" else "green"
-                self.light_timer = 0
-                self.pedestrian_crossing_enabled = False
-                self.pedestrians.clear()
-
+                if self.traffic_light_state == "red" and self.pedestrians:
+                    # If pedestrians are still crossing, do not change the light
+                    self.pause_timer = True
+                    self.feedback_message = "Waiting for pedestrians to cross..."
+                    self.feedback_timer = self.feedback_duration
+                else:
+                    self.pause_timer = False
+                    self.traffic_light_state = "red" if self.traffic_light_state == "green" else "green"
+                    self.light_timer = 0
+                    self.pedestrian_crossing_enabled = False
+                    self.pedestrians.clear()
+            
     def check_collision(self):
         for vehicle in self.vehicles:
             for ped in self.pedestrians:
@@ -169,7 +199,7 @@ class TrafficSimulation:
         # Only update pedestrians if no vehicle is in crossing
         if not self.is_vehicle_in_zebra_crossing():
             for ped in self.pedestrians[:]:
-                if self.traffic_light_state == "red" and self.pedestrian_crossing_enabled:
+                if self.pedestrian_crossing_enabled:
                     ped['y'] += ped['speed']
                 if ped['y'] > 400:
                     self.pedestrians.remove(ped)
@@ -269,6 +299,7 @@ class TrafficSimulation:
             self.draw_vehicles()
             self.draw_pedestrians()
             self.draw_timer()
+            self.draw_feedback()
             
             if self.accident_occurred:
                 self.draw_game_over()
