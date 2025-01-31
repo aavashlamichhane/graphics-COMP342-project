@@ -266,6 +266,29 @@ class TrafficSimulation:
             glVertex2f(ped['x'] + 15, ped['y'] + 30)
             glVertex2f(ped['x'], ped['y'] + 30)
             glEnd()
+    
+    def draw_background(self):
+        # Sky gradient
+        glBegin(GL_QUADS)
+        glColor3f(0.53, 0.81, 0.98)  # Light blue
+        glVertex2f(0, self.height)
+        glVertex2f(self.width, self.height)
+        glColor3f(0.0, 0.0, 0.5)  # Dark blue
+        glVertex2f(self.width, 400)
+        glVertex2f(0, 400)
+        glEnd()
+
+        # Ground gradient
+        glBegin(GL_QUADS)
+        glColor3f(0.0, 0.5, 0.0)  # Dark green
+        glVertex2f(0, 0)
+        glVertex2f(self.width, 0)
+        glColor3f(0.2, 0.8, 0.2)  # Light green
+        glVertex2f(self.width, 200)
+        glVertex2f(0, 200)
+        glEnd()
+    
+    
 
     def reset_simulation(self):
         self.vehicles.clear()
@@ -294,13 +317,14 @@ class TrafficSimulation:
                 self.update_vehicles()
                 self.update_pedestrians()
             
+            self.draw_background()
             self.draw_road()
             self.draw_traffic_light()
             self.draw_vehicles()
             self.draw_pedestrians()
             self.draw_timer()
             self.draw_feedback()
-            
+
             if self.accident_occurred:
                 self.draw_game_over()
             
